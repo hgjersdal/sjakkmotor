@@ -1,0 +1,7 @@
+Håvards sjakkmotor: A very simple and not very fast chess engine.
+
+Design goals: Beat Pål (ELO approx 1050), in less than 500 lines of code.
+
+Negamax with alpha beta pruning and iterative deepening. Evaluation function taken from https://chessprogramming.wikispaces.com/Simplified+evaluation+function.
+
+Does not understand 50 move rule, repeated positions.

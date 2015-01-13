@@ -1,0 +1,3 @@
+(defpackage :sjakk
+  (:use :cl))
+
