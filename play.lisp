@@ -37,5 +37,5 @@
 
 (new-game)
 (print-board *board*)
-(human-move 3 2 2 3 t)
-(computer-move nil)
+(human-move 5 1 5 6 nil)
+(computer-move t)
