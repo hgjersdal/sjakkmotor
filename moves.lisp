@@ -1,4 +1,4 @@
-;;(declaim (optimize (speed 3) (debug 0) (safety 0)))
+(declaim (optimize (speed 3) (debug 0) (safety 0)))
 
 (in-package :sjakk)
 
@@ -11,7 +11,7 @@
   (new-val 0 :type (signed-byte 8)) ;;Needed for pawn transform
   (captured-val 0 :type (signed-byte 8))
   (evaluation 0 :type (signed-byte 16))
-  (enpassent nil :type boolean)
+  (enpassant nil :type boolean)
   (double-jump nil :type boolean)
   (castle-short nil :type boolean)
   (castle-long nil :type boolean))
@@ -36,18 +36,18 @@
 (defparameter *max-eval* 32500)
 
 (defun make-move (old-col old-row new-col new-row old-val
-		  &optional  (capture-val 0) new-val enpassent double-jump)
+		  &optional  (capture-val 0) new-val enpassant double-jump)
   (when (null new-val)(setf new-val old-val))
   (make-chess-move :old-col old-col :old-row old-row
 		   :new-col new-col :new-row new-row
 		   :old-val old-val :new-val new-val
-		   :captured-val capture-val :enpassent enpassent
+		   :captured-val capture-val :enpassant enpassant
 		   :double-jump double-jump
 		   :evaluation (if (> old-val 0) (* -1 *max-eval*) (* 1 *max-eval*))))
 
 (defun push-move (moves old-col old-row new-col new-row old-val
-		  &optional (capture-val 0) new-val double-jump enpassent)
-  (cons (make-move old-col old-row new-col new-row old-val capture-val new-val enpassent double-jump)
+		  &optional (capture-val 0) new-val double-jump enpassant)
+  (cons (make-move old-col old-row new-col new-row old-val capture-val new-val enpassant double-jump)
 	moves))
 
 (defmacro pawn-strike (board col delta-col row delta-row piece-capture-test
@@ -76,9 +76,9 @@
 				      ,delta-row 0 ,delta-row t nil))))
 	  ,moves))
 
-(defmacro enpassent-move (col row delta-row double-jump-col enpassent-row moves)
-  `(progn (when (and (= ,row ,enpassent-row) (= (abs (- ,double-jump-col ,col)) 1))
-	    (setf ,moves (push-move ,moves ,col ,row ,double-jump-col (+ ,row 1)
+(defmacro enpassant-move (col row delta-row double-jump-col enpassant-row moves)
+  `(progn (when (and (= ,row ,enpassant-row) (= (abs (- ,double-jump-col ,col)) 1))
+	    (setf ,moves (push-move ,moves ,col ,row ,double-jump-col (+ ,row ,delta-row)
 				    ,delta-row (- ,delta-row) ,delta-row nil t)))
 	  ,moves))
 
@@ -86,14 +86,14 @@
   (setf moves (pawn-strike board col -1 row 1 < (> col 0) (= row 6) moves))
   (setf moves (pawn-strike board col  1 row 1 < (< col 7) (= row 6) moves))
   (setf moves (pawn-move board col row 1 (= row 6) (= row 1) moves))
-  (when double-jump-p (setf moves (enpassent-move col row 1 double-jump-col 4 moves)))
+  (when double-jump-p (setf moves (enpassant-move col row 1 double-jump-col 4 moves)))
   moves)
 
 (defun list-black-pawn-moves (board col row moves double-jump-p double-jump-col)
   (setf moves (pawn-strike board col -1 row -1 > (> col 0) (= row 1) moves))
   (setf moves (pawn-strike board col  1 row -1 > (< col 7) (= row 1) moves)) 
   (setf moves (pawn-move board col row -1 (= row 1) (= row 6) moves))
-  (when double-jump-p (setf moves (enpassent-move col row -1 double-jump-col 3 moves)))
+  (when double-jump-p (setf moves (enpassant-move col row -1 double-jump-col 3 moves)))
   moves)
 
 (defun maybe-take (old-col old-row new-col new-row piece-val position-val whitep moves)
@@ -215,8 +215,14 @@
     (setf (aref board 0 castle-row) 0))
   (setf (aref board (chess-move-new-col move) (chess-move-new-row move)) (chess-move-new-val move))
   (setf (aref board (chess-move-old-col move) (chess-move-old-row move)) 0)
-  (when (chess-move-enpassent move) 
-    (setf (aref board (chess-move-new-col move) (chess-move-old-row move)) 0)))
+  (when (chess-move-enpassant move) 
+    (setf (aref board (chess-move-new-col move) (chess-move-old-row move)) 0))
+  (when (chess-move-enpassant move) 
+    ;;Original position 0
+    ;;Ahead of original: 1
+    ;;two ahead of original 0
+    ;;next to two ahead of original 0
+    ))
 
 (defun unmove-piece (board move castle-row)
   (when (chess-move-castle-short move)
@@ -227,9 +233,15 @@
     (setf (aref board 3 castle-row) 0))
   (setf (aref board (chess-move-new-col move) (chess-move-new-row move)) (chess-move-captured-val move))
   (setf (aref board (chess-move-old-col move) (chess-move-old-row move)) (chess-move-old-val move))
-  (when (chess-move-enpassent move)
+  (when (chess-move-enpassant move)
     (setf (aref board (chess-move-new-col move) (chess-move-new-row move)) 0)
-    (setf (aref board (chess-move-new-col move) (chess-move-old-row move)) (chess-move-captured-val move))))
+    (setf (aref board (chess-move-new-col move) (chess-move-old-row move)) (chess-move-captured-val move)))
+  (when (chess-move-enpassant move)
+    ;; original pawn position should be 0
+    ;; position ahead of original should be 0
+    ;; To steps ahead should be 1
+    ;; Col next to two steps ahead should be 1
+    ))
 
 (defun list-moves (board can-castle whitep double-jump-p double-jump-col)
   (let ((moves nil)

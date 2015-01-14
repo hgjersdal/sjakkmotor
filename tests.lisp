@@ -25,8 +25,6 @@
     (let ((move (alpha-beta board (make-chess-move) 4 -32500 32500 t (make-can-castle))))
       (format t "~a,~a~%" move (chess-move-evaluation move)))))
 
-
-
 (defun test-moves ()
   (let ((board (make-array (list 8 8) :element-type '(signed-byte 8)
   			   :initial-element 0))
@@ -113,44 +111,44 @@
 
 (defun missing-bishop ()
   (let ((board (make-array (list 8 8) :element-type '(signed-byte 8))))
-    (loop for col in (list 0 1 2 5 6 7) do
-    ;;(loop for col in (list 0 1 5 6 7) do
+    ;;(loop for col in (list 0 1 2 5 6 7) do
+    (loop for col in (list 2 ) do
 	 (setf (aref board col 1) (make-piece t :pawn)))
     (setf (aref board 4 2) (make-piece t :pawn))
-    (setf (aref board 0 0) (make-piece t :rook))
-    (setf (aref board 1 0) (make-piece t :knight))
+    ;;(setf (aref board 0 0) (make-piece t :rook))
+    ;;(setf (aref board 1 0) (make-piece t :knight))
     ;;(setf (aref board 2 0) (make-piece t :bishop))
     ;;(setf (aref board 1 4) (make-piece t :bishop))
-    (setf (aref board 6 4) (make-piece t :queen))
+    ;;(setf (aref board 6 4) (make-piece t :queen))
     (setf (aref board 4 0) (make-piece t :king))
-    (setf (aref board 7 0) (make-piece t :rook))
+    ;;(setf (aref board 7 0) (make-piece t :rook))
     ;;(setf (aref board 2 2) (make-piece t :knight)) original
 
-    (setf (aref board 4 1) (make-piece t :knight))
-    (setf (aref board 3 1) (make-piece t :bishop))
-    (setf (aref board 2 5) (make-piece t :bishop))
+    ;;(setf (aref board 4 1) (make-piece t :knight))
+    ;;(setf (aref board 3 1) (make-piece t :bishop))
+    ;;(setf (aref board 2 5) (make-piece t :bishop))
     
-    (loop for col in (list 0 1 5 6 7) do
-	 (setf (aref board col 6) (make-piece nil :pawn)))
+    ;;(loop for col in (list 0 1 5 6 7) do
+    ;;(setf (aref board col 6) (make-piece nil :pawn)))
     ;;(setf (aref board 3 4) (make-piece nil :pawn))
-    (setf (aref board 4 5) (make-piece nil :pawn))
-    (setf (aref board 0 7) (make-piece nil :rook))
-    (setf (aref board 6 7) (make-piece nil :rook))
+    ;;(setf (aref board 4 5) (make-piece nil :pawn))
+    ;;(setf (aref board 0 7) (make-piece nil :rook))
+    ;;(setf (aref board 6 7) (make-piece nil :rook))
     ;;(setf (aref board 3 7) (make-piece nil :queen))
     (setf (aref board 4 7) (make-piece nil :king))
-    (setf (aref board 2 5) (make-piece nil :knight))
-    (setf (aref board 5 5) (make-piece nil :knight))
+    ;;(setf (aref board 2 5) (make-piece nil :knight))
+    ;;(setf (aref board 5 5) (make-piece nil :knight))
     (setf (aref board 2 4) (make-piece nil :bishop))
-    (setf (aref board 3 6) (make-piece nil :bishop))
+    ;;(setf (aref board 3 6) (make-piece nil :bishop))
 
 
     (setf (aref board 3 3) (make-piece nil :pawn))
-    (setf (aref board 2 6) (make-piece nil :queen))
+    ;;(setf (aref board 2 6) (make-piece nil :queen))
     
     (print-board board)
 
     (multiple-value-bind (val move)
-	(time (negamaxit board *last-move* 7 -32500 32500 t *can-castle*))
+	(time (negamaxit board *last-move* 3 -32500 32500 t *can-castle*))
 	;;(time (negamaxit board *last-move* 7 -32500 32500 nil *can-castle*))
       (format t "~a: ~a~%" move val)
       ;;(setf *last-move* move)
