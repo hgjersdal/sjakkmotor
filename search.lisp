@@ -12,36 +12,6 @@
       (and (chess-move-castle-short move) ;;Was the castle move legal?
 	   (field-is-attackedp moves 5 castle-row))))
 
-(defun negamax (board move depth alpha beta whitep castlings)
-  (let ((can-castle (if whitep (can-castle-white castlings) (can-castle-black castlings)))
-	(scale (if whitep 1 -1))
-	(castle-row (if whitep 0 7)))
-    (when (= depth 0)
-      ;;(setf (chess-move-evaluation move) (* scale (evaluate board)))
-      (return-from negamax (* scale (evaluate board))))
-    (when (or (car can-castle) (cdr can-castle))
-      (castle-still-legalp move can-castle castle-row))
-    (let* ((moves (list-moves board can-castle whitep (chess-move-double-jump move)
-			      (chess-move-old-col move)))
-	   (best-move nil))
-      (when (move-illegalp board move castle-row moves)
-       	(return-from negamax (values 32500 nil)))
-      (loop for m2 in moves
-	 with val = 0
-	 with best-val = alpha do
-	   (move-piece board m2 castle-row)
-	   (setf val (- (negamax board m2 (- depth 1) (- beta) (- alpha) (not whitep)
-				 (copy-castle castlings))))
-	   (unmove-piece board m2 castle-row)
-	   (when (> val best-val)
-	     (setf best-val val)
-	     (setf best-move m2))
-	   (setf alpha (max alpha val))
-	   (when (>= alpha beta)
-	     (return (values best-val best-move)))
-	 finally
-	   (return (values best-val best-move))))))
-
 (defun negamaxit (board move depth alpha beta whitep castlings)
   (let ((can-castle (if whitep (can-castle-white castlings) (can-castle-black castlings)))
 	(scale (if whitep 1 -1))
@@ -56,7 +26,7 @@
 	  (best-val 0))
       (when (move-illegalp board move castle-row moves)
        	(return-from negamaxit (values 32500 nil)))
-      (loop for d from depth to depth
+      (loop for d from 1 to depth
 	 with al = 0 do
 	   (setf al alpha)
 	   (setf best-val al)
@@ -67,11 +37,6 @@
 					(copy-castle castlings))))
 		(setf (chess-move-evaluation m2) val)
 		(unmove-piece board m2 castle-row)
-		(print-board board)
-		(when (and (= depth 7)
-			   (= (aref board 2 4) 0))
-		  (format t "Vanished: ~a~%" m2)
-		  (return))
 		(when (> val best-val)
 		  (setf best-val val)
 		  (setf best-move m2))

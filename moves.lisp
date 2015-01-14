@@ -1,5 +1,4 @@
 (declaim (optimize (speed 3) (debug 0) (safety 0)))
-
 (in-package :sjakk)
 
 (defstruct chess-move 
@@ -65,21 +64,22 @@
 
 (defmacro pawn-move (board col row delta-row second-to-last at-start moves)
   `(progn (when (= (aref ,board ,col (+ ,row ,delta-row)) 0)
-	    (if ,second-to-last ;;Promote?
+	    (if ,second-to-last
 		(loop for val from 2 to 5 do
 		     (setf ,moves (push-move ,moves ,col  ,row ,col (+ ,row ,delta-row)
 					     ,delta-row 0 (* ,delta-row val))))
 		(setf ,moves (push-move ,moves ,col ,row
 					,col (+ ,row ,delta-row) ,delta-row)))
-	    (when (and ,at-start (= (aref ,board ,col (+ ,row (* 2 ,delta-row))) 0)) ;;2 steps
+	    (when (and ,at-start (= (aref ,board ,col (+ ,row (* 2 ,delta-row))) 0))
 	      (setf ,moves (push-move ,moves ,col ,row ,col (+ ,row (* 2 ,delta-row))
 				      ,delta-row 0 ,delta-row t nil))))
 	  ,moves))
 
 (defmacro enpassant-move (col row delta-row double-jump-col enpassant-row moves)
   `(progn (when (and (= ,row ,enpassant-row) (= (abs (- ,double-jump-col ,col)) 1))
-	    (setf ,moves (push-move ,moves ,col ,row ,double-jump-col (+ ,row ,delta-row)
-				    ,delta-row (- ,delta-row) ,delta-row nil t)))
+	    (setf ,moves
+		  (push-move ,moves ,col ,row ,double-jump-col (+ ,row ,delta-row)
+			     ,delta-row (- ,delta-row) ,delta-row nil t)))
 	  ,moves))
 
 (defun list-white-pawn-moves (board col row moves double-jump-p double-jump-col)
@@ -164,8 +164,7 @@
 					 :new-val (aref board 4 castle-row)
 					 :castle-short t :evaluation
 					 (if (> (aref board 4 castle-row) 0) (* -1 *max-eval*) (* 1 *max-eval*)))
-			moves))))
-  moves)
+			moves)))) moves)
 
 (defun list-long-castle (board moves whitep)
   (let ((castle-row (if whitep 0 7)))
@@ -178,8 +177,7 @@
 					 :new-val (aref board 4 castle-row)
 					 :castle-long t :evaluation
 					 (if (> (aref board 4 castle-row) 0) (* -1 *max-eval*) (* 1 *max-eval*)))
-			moves))))
-  moves)
+			moves)))) moves)
 
 (defun king-capturep (board moves)
   (loop for move in moves
@@ -195,14 +193,14 @@
        (return t)))
 
 (defun castle-still-legalp (move can-castle castle-row)
-  (when (and (= (chess-move-old-col move) 4) ;;King move
+  (when (and (= (chess-move-old-col move) 4)
 	     (= (chess-move-old-row move) castle-row))
     (setf (car can-castle) nil
 	  (cdr can-castle) nil))
-  (when (and (= (chess-move-old-col move) 0) ;;Left rook
+  (when (and (= (chess-move-old-col move) 0)
 	     (= (chess-move-old-row move) castle-row))
     (setf (cdr can-castle) nil))
-  (when (and (= (chess-move-old-col move) 7) ;;Right rook
+  (when (and (= (chess-move-old-col move) 7)
 	     (= (chess-move-old-row move) castle-row))
     (setf (car can-castle) nil)))
 
@@ -216,13 +214,7 @@
   (setf (aref board (chess-move-new-col move) (chess-move-new-row move)) (chess-move-new-val move))
   (setf (aref board (chess-move-old-col move) (chess-move-old-row move)) 0)
   (when (chess-move-enpassant move) 
-    (setf (aref board (chess-move-new-col move) (chess-move-old-row move)) 0))
-  (when (chess-move-enpassant move) 
-    ;;Original position 0
-    ;;Ahead of original: 1
-    ;;two ahead of original 0
-    ;;next to two ahead of original 0
-    ))
+    (setf (aref board (chess-move-new-col move) (chess-move-old-row move)) 0)))
 
 (defun unmove-piece (board move castle-row)
   (when (chess-move-castle-short move)
@@ -235,13 +227,7 @@
   (setf (aref board (chess-move-old-col move) (chess-move-old-row move)) (chess-move-old-val move))
   (when (chess-move-enpassant move)
     (setf (aref board (chess-move-new-col move) (chess-move-new-row move)) 0)
-    (setf (aref board (chess-move-new-col move) (chess-move-old-row move)) (chess-move-captured-val move)))
-  (when (chess-move-enpassant move)
-    ;; original pawn position should be 0
-    ;; position ahead of original should be 0
-    ;; To steps ahead should be 1
-    ;; Col next to two steps ahead should be 1
-    ))
+    (setf (aref board (chess-move-new-col move) (chess-move-old-row move)) (chess-move-captured-val move))))
 
 (defun list-moves (board can-castle whitep double-jump-p double-jump-col)
   (let ((moves nil)
@@ -263,8 +249,3 @@
     (when (cdr can-castle)
       (setf moves (list-long-castle board moves whitep)))
     moves))
-
-;;; Check that the new rook space is not under attack when catling
-;;; Copy the conses for catling every move
-;;; Check that the king is not in check
-;;; Check if we are in the endgame
