@@ -8,7 +8,9 @@
   (setf *board* (make-initial-board)
 	*can-castle* (make-can-castle)
 	*last-move* (make-chess-move)))
-  
+
+(setf *last-move* (make-move 0 0 0 1 0 0 0 nil nil))
+
 (defun computer-move (whitep)
   (format t "Processing!~%")
   (multiple-value-bind (val move)
@@ -30,10 +32,10 @@
 		 (= (chess-move-new-col move) tcol)
 		 (= (chess-move-new-row move) trow)) do
 	 (setf *last-move* move)
-	 (move-piece *board* move 7)
+	 (move-piece *board* move (if whitep 0 7))
 	 (print-board *board*))))
 
 (new-game)
 (print-board *board*)
-(human-move 1 6 2 5)
-(computer-move)
+(human-move 3 2 2 3 t)
+(computer-move nil)
