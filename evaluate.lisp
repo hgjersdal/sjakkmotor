@@ -1,5 +1,4 @@
 (declaim (optimize (speed 3) (debug 0) (safety 0)))
-
 (in-package :sjakk)
 
 (defun piece-value (piece)

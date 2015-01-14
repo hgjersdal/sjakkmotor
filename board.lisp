@@ -1,5 +1,4 @@
 ;;(declaim (optimize (speed 3) (debug 0) (safety 0)))
-
 (in-package :sjakk)
 
 (defun piece-type-to-val (type)
@@ -58,8 +57,5 @@
 				    (char-downcase (piece-letter (aref board col row)))
 				    (char-upcase (piece-letter (aref board col row)))))))
        (format t "~%"))
-  ;;  (format t "  a b c d e f g h ~%"))
   (format t "    a b c d e f g h ~%")
-  (format t "    0 1 2 3 4 5 6 7 ~%")
-  )
-
+  (format t "    0 1 2 3 4 5 6 7 ~%"))

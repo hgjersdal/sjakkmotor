@@ -9,18 +9,20 @@
 	*can-castle* (make-can-castle)
 	*last-move* (make-chess-move)))
   
-(defun computer-move ()
+(defun computer-move (whitep)
   (format t "Processing!~%")
   (multiple-value-bind (val move)
-      (time (negamaxit *board* *last-move* 7 -32500 32500 t *can-castle*))
+      (time (negamaxit *board* *last-move* 7 -32500 32500 whitep *can-castle*))
     (format t "~a: ~a~%" move val)
     (setf *last-move* move)
     (move-piece *board* move 0)
     (print-board *board*)))
 
-(defun human-move (fcol frow tcol trow)
-  (let ((moves (list-moves *board* (can-castle-black *can-castle*) nil
-			   (chess-move-double-jump *last-move*)
+(defun human-move (fcol frow tcol trow whitep)
+  (let ((moves (list-moves *board*
+			   (if whitep (can-castle-white *can-castle*)
+			       (can-castle-black *can-castle*))
+			   whitep (chess-move-double-jump *last-move*)
 			   (chess-move-old-col *last-move*))))
     (loop for move in moves 
        when (and (= (chess-move-old-col move) fcol)

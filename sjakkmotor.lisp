@@ -1,3 +1,4 @@
 (defpackage :sjakk
-  (:use :cl))
+  (:use :cl)
+  (:export :new-game :print-board :computer-move :human-move))
 

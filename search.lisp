@@ -1,15 +1,11 @@
 (declaim (optimize (speed 3) (debug 0) (safety 0)))
 (in-package :sjakk)
 
-;;;If any move in list of moves can take king, stop search, return +/- max
-;;;If castle, check that new rook field is not attacked. If so, stop search, return +/- max
-;;;If king not capturable, and no legal moves, 0
-
 (defun move-illegalp (board move castle-row moves)
   (or (king-capturep board moves)
       (and (chess-move-castle-long move)
 	   (field-is-attackedp moves 3 castle-row))
-      (and (chess-move-castle-short move) ;;Was the castle move legal?
+      (and (chess-move-castle-short move)
 	   (field-is-attackedp moves 5 castle-row))))
 
 (defun negamaxit (board move depth alpha beta whitep castlings)
