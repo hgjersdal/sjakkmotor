@@ -1,251 +1,257 @@
-;;(declaim (optimize (speed 3) (debug 0) (safety 0)))
-(in-package :sjakk)
+(declaim (optimize (speed 3) (debug 0) (safety 0)))
+(in-package :sjakk2)
 
-(defstruct chess-move 
-  (old-col 0 :type (unsigned-byte 8))
-  (old-row 0 :type (unsigned-byte 8))
-  (new-col 0 :type (unsigned-byte 8))
-  (new-row 0 :type (unsigned-byte 8))
-  (old-val 0 :type (signed-byte 8))
-  (new-val 0 :type (signed-byte 8)) ;;Needed for pawn transform
-  (captured-val 0 :type (signed-byte 8))
-  (evaluation 0 :type (signed-byte 16))
-  (enpassant nil :type boolean)
-  (double-jump nil :type boolean)
-  (castle-short nil :type boolean)
-  (castle-long nil :type boolean))
+(defun set-move (move oc or nc nr piece-val captured-val new-val
+		 enpassant double-jump c-long c-short)
+  (declare (type fixnum oc or nc nr piece-val captured-val new-val)
+	   (type boolean double-jump enpassant c-long c-short)
+	   (type chess-move move))
+  (setf (chess-move-evaluation move) (- *max-eval*)
+	(chess-move-old-col move) oc 
+	(chess-move-old-row move) or
+	(chess-move-new-col move) nc
+	(chess-move-new-row move) nr
+	(chess-move-old-val move) piece-val
+	(chess-move-new-val move) new-val
+	(chess-move-captured-val move) captured-val
+	(chess-move-enpassant move) enpassant
+	(chess-move-double-jump move) double-jump
+	(chess-move-castle-long move) c-long
+	(chess-move-castle-short move) c-short))
 
-(defmethod print-object ((chess-move chess-move) stream)
-  (cond ((chess-move-castle-short chess-move) (format stream "O-O"))
-	((chess-move-castle-long chess-move) (format stream "O-O-O"))
-	(t (format stream "~a~a~a~a~a~a~a"
-		   (if (= (abs (chess-move-old-val chess-move)) 1)
-		       ""
-		       (aref "  NBRQK" (abs (chess-move-old-val chess-move))))
-		   (aref "abcdefgh" (chess-move-old-col chess-move))
-		   (aref "12345678" (chess-move-old-row chess-move))
-		   (if (= (chess-move-captured-val chess-move) 0) "" "x")
-		   (aref "abcdefgh" (chess-move-new-col chess-move))
-		   (aref "12345678" (chess-move-new-row chess-move))
-		   (if (= (chess-move-new-val chess-move) (chess-move-old-val chess-move))
-		       ""
-		       (format nil "=~a" (aref "  NBRQK" (abs (chess-move-new-val chess-move))))))))
-  chess-move)
+(defun push-move (moves oc or nc nr piece-val captured-val new-val
+		  &key enpassant double-jump c-long c-short)
+  (set-move (aref moves (fill-pointer moves)) oc or nc nr piece-val captured-val
+	    new-val enpassant double-jump c-long c-short)
+  (incf (fill-pointer moves)))
+  
 
-(defparameter *max-eval* 32500)
+(defun push-pawn-move (moves scale oc or nc nr piece-val captured-val trans-row
+		       double-jump enpassant)
+  (declare (type fixnum scale oc or nc nr piece-val captured-val trans-row)
+	   (type boolean double-jump enpassant)
+	   (type (vector chess-move 256) moves))
+  (if (= nr trans-row)
+      (loop for val from 2 to 5 do
+	   (push-move moves oc or nc nr piece-val captured-val (* scale val)
+		      :enpassant enpassant))
+      (push-move moves oc or nc nr piece-val captured-val piece-val
+		 :enpassant enpassant :double-jump double-jump)))
 
-(defun make-move (old-col old-row new-col new-row old-val
-		  &optional  (capture-val 0) new-val enpassant double-jump)
-  (when (null new-val)(setf new-val old-val))
-  (make-chess-move :old-col old-col :old-row old-row
-		   :new-col new-col :new-row new-row
-		   :old-val old-val :new-val new-val
-		   :captured-val capture-val :enpassant enpassant
-		   :double-jump double-jump
-		   :evaluation (if (> old-val 0) (* -1 *max-eval*) (* 1 *max-eval*))))
+(defun pawn-take (board oc or nc nr piece-val moves trans-row scale double-jump
+		  enpassant)
+  (declare (type fixnum scale oc or nc nr piece-val trans-row)
+	   (type boolean double-jump enpassant)
+	   (type (vector chess-move 256) moves)
+	   (type (simple-array fixnum (8 8)) board))
+  (when (or (< nc 0) (> nc 7)) (return-from pawn-take))
+  (let ((position-val (aref board nc nr)))
+    (when (< (* position-val scale) 0)
+      (push-pawn-move moves scale oc or nc nr piece-val position-val trans-row
+		      double-jump enpassant))))
 
-(defun push-move (moves old-col old-row new-col new-row old-val
-		  &optional (capture-val 0) new-val double-jump enpassant)
-  (cons (make-move old-col old-row new-col new-row old-val capture-val new-val enpassant double-jump)
-	moves))
-
-(defmacro pawn-strike (board col delta-col row delta-row piece-capture-test
-		       not-at-side second-to-last moves)
-  `(progn (when ,not-at-side
-	    (let ((capture-val (aref ,board (+ ,col ,delta-col) (+ ,row ,delta-row))))
-	      (when (,piece-capture-test capture-val 0)
-		(if ,second-to-last ;;Promote?
-		    (loop for val from 2 to 5 do
-			 (setf ,moves (push-move ,moves ,col ,row (+ ,col ,delta-col) (+ ,row ,delta-row)
-						 ,delta-row capture-val (* ,delta-row val))))
-		    (setf ,moves (push-move ,moves ,col  ,row (+ ,col ,delta-col) (+ ,row ,delta-row) 
-					    ,delta-row capture-val))))))
-	  ,moves))
-
-(defmacro pawn-move (board col row delta-row second-to-last at-start moves)
-  `(progn (when (= (aref ,board ,col (+ ,row ,delta-row)) 0)
-	    (if ,second-to-last
-		(loop for val from 2 to 5 do
-		     (setf ,moves (push-move ,moves ,col  ,row ,col (+ ,row ,delta-row)
-					     ,delta-row 0 (* ,delta-row val))))
-		(setf ,moves (push-move ,moves ,col ,row
-					,col (+ ,row ,delta-row) ,delta-row)))
-	    (when (and ,at-start (= (aref ,board ,col (+ ,row (* 2 ,delta-row))) 0))
-	      (setf ,moves (push-move ,moves ,col ,row ,col (+ ,row (* 2 ,delta-row))
-				      ,delta-row 0 ,delta-row t nil))))
-	  ,moves))
-
-(defmacro enpassant-move (col row delta-row double-jump-col enpassant-row moves)
-  `(progn (when (and (= ,row ,enpassant-row) (= (abs (- ,double-jump-col ,col)) 1))
-	    (setf ,moves
-		  (push-move ,moves ,col ,row ,double-jump-col (+ ,row ,delta-row)
-			     ,delta-row (- ,delta-row) ,delta-row nil t)))
-	  ,moves))
-
-(defun list-white-pawn-moves (board col row moves double-jump-p double-jump-col)
-  (setf moves (pawn-strike board col -1 row 1 < (> col 0) (= row 6) moves))
-  (setf moves (pawn-strike board col  1 row 1 < (< col 7) (= row 6) moves))
-  (setf moves (pawn-move board col row 1 (= row 6) (= row 1) moves))
-  (when double-jump-p (setf moves (enpassant-move col row 1 double-jump-col 4 moves)))
-  moves)
-
-(defun list-black-pawn-moves (board col row moves double-jump-p double-jump-col)
-  (setf moves (pawn-strike board col -1 row -1 > (> col 0) (= row 1) moves))
-  (setf moves (pawn-strike board col  1 row -1 > (< col 7) (= row 1) moves)) 
-  (setf moves (pawn-move board col row -1 (= row 1) (= row 6) moves))
-  (when double-jump-p (setf moves (enpassant-move col row -1 double-jump-col 3 moves)))
-  moves)
-
-(defun maybe-take (old-col old-row new-col new-row piece-val position-val whitep moves)
-  (when (and whitep (< position-val 0))
-    (setf moves (push-move moves old-col old-row new-col new-row piece-val position-val)))
-  (when (and (not whitep) (> position-val 0))
-    (setf moves (push-move moves old-col old-row new-col new-row piece-val position-val)))
-  moves)
+(defun push-pawn-moves (board col row moves home-row transform-row enpassant-row
+			double-jump-p double-jump-col scale)
+  (declare (type fixnum col row home-row transform-row enpassant-row
+		 double-jump-col scale)
+	   (type boolean double-jump-p)
+	   (type (vector chess-move 256) moves)
+	   (type (simple-array fixnum (8 8)) board))
+  (pawn-take board col row (+ col 1) (+ row scale) scale moves transform-row
+	     scale nil nil)
+  (pawn-take board col row (- col 1) (+ row scale) scale moves transform-row
+	     scale nil nil)
+  (when (= (aref board col (+ row scale)) 0)
+    (push-pawn-move moves scale col row col (+ row scale) scale 0 transform-row
+		    nil nil)
+    (when (and (= row home-row) (= (aref board col (+ row (* 2 scale))) 0))
+      (push-pawn-move moves scale col row col (+ row (* 2 scale)) scale 0
+		      transform-row t nil)))
+  (when (and double-jump-p (= row enpassant-row) (= 1 (abs (- col double-jump-col))))
+    (push-pawn-move moves scale col row double-jump-col (+ row scale) scale
+		    (- scale) transform-row nil t)))
+  
+(defun maybe-take (oc or nc nr piece-val position-val scale moves)
+  (declare (type fixnum oc or nc nr piece-val position-val scale)
+	   (type (vector chess-move 256) moves))
+  (when (<= (* position-val scale) 0)
+    (push-move moves oc or nc nr piece-val position-val piece-val)))
 
 (macrolet ((loopy (line1 line2)
 	      `(loop ,@line1
 		  ,@line2
 		  when (= (aref board cc rr) 0) do
-		  (setf moves (push-move moves col row cc rr piece-val))
-		  else do (setf moves (maybe-take col row cc rr piece-val
-						  (aref board cc rr) whitep moves))
+		  (push-move moves col row cc rr piece-val 0 piece-val)
+		  else do (maybe-take col row cc rr piece-val (aref board cc rr)
+				      scale moves)
 		  (return))))
   
-  (defun list-rook-moves (board col row moves whitep)
+  (defun push-rook-moves (board col row moves scale)
+  (declare (type fixnum col row scale)
+	   (type (vector chess-move 256) moves)
+	   (type (simple-array fixnum (8 8)) board))
     (let ((piece-val (aref board col row)))
       (loopy (for cc from (+ col 1) to 7) (with rr = row))
       (loopy (for cc from (- col 1) downto 0) (with rr = row))
       (loopy (for rr from (+ row 1) to 7) (with cc = col))
-      (loopy (for rr from (- row 1) downto 0) (with cc = col)))
-    moves)
+      (loopy (for rr from (- row 1) downto 0) (with cc = col))))
 
-  (defun list-bishop-moves (board col row moves whitep)
+  (defun push-bishop-moves (board col row moves scale)
+  (declare (type fixnum col row scale)
+	   (type (vector chess-move 256) moves)
+	   (type (simple-array fixnum (8 8)) board))
     (let ((piece-val (aref board col row)))
       (loopy (for cc from (+ col 1) to 7) (for rr from (+ row 1) to 7))
       (loopy (for cc from (+ col 1) to 7) (for rr from (- row 1) downto 0))
       (loopy (for cc from (- col 1) downto 0) (for rr from (+ row 1) to 7))
-      (loopy (for cc from (- col 1) downto 0) (for rr from (- row 1) downto 0)))
-    moves))
+      (loopy (for cc from (- col 1) downto 0) (for rr from (- row 1) downto 0)))))
 
-(defun list-queen-moves (board col row moves whitep)
-  (setf moves (list-rook-moves board col row moves whitep))
-  (setf moves (list-bishop-moves board col row moves whitep))
-  moves)
+(defun push-queen-moves (board col row moves scale)
+  (push-rook-moves board col row moves scale)
+  (push-bishop-moves board col row moves scale))
 
-(defun maybe-take-with-bounds (board col row cc rr whitep piece-val moves)
-  (when (and (> cc -1) (< cc 8) (> rr -1) (< rr 8))
-    (if (= 0 (aref board cc rr))
-	(setf moves (push-move moves col row cc rr piece-val))
-	(setf moves (maybe-take col row cc rr piece-val (aref board cc rr) whitep moves))))
-  moves)
+(defun maybe-take-with-bounds (board oc or nc nr scale piece-val moves)
+  (when (and (> nc -1) (< nc 8) (> nr -1) (< nr 8))
+    (maybe-take oc or nc nr piece-val (aref board nc nr) scale moves)))
 
-(defun list-knight-moves (board col row moves whitep)
+(defun push-knight-moves (board col row moves scale)
   (loop for cc in '(1 -1  1 -1 2 -2  2 -2)
      for rr in    '(2  2 -2 -2 1  1 -1 -1)
      with piece-val = (aref board col row) do
-       (setf moves (maybe-take-with-bounds board col row (+ col cc) (+ row rr) whitep piece-val moves)))
-  moves)
+       (maybe-take-with-bounds board col row (+ col cc) (+ row rr) scale piece-val
+			       moves)))
 	    
-(defun list-king-moves (board col row moves whitep)
+(defun push-king-moves (board col row moves scale)
   (let ((piece-val (aref board col row)))
     (loop for cc from (- col 1) to (+ col 1) do
-       (loop for rr from (- row 1) to (+ row 1) do
-	    (setf moves (maybe-take-with-bounds board col row cc rr whitep piece-val moves)))))
-  moves)
+	 (loop for rr from (- row 1) to (+ row 1) do
+	      (maybe-take-with-bounds board col row cc rr scale piece-val moves)))))
 
-(defun list-short-castle (board moves whitep)
-  (let ((castle-row (if whitep 0 7)))
-    (when (and (= (aref board 5 castle-row) 0)
-	       (= (aref board 6 castle-row) 0))
-      (setf moves (cons (make-chess-move :old-col 4 :old-row castle-row
-					 :new-col 6 :new-row castle-row
-					 :old-val (aref board 4 castle-row)
-					 :new-val (aref board 4 castle-row)
-					 :castle-short t :evaluation
-					 (if (> (aref board 4 castle-row) 0) (* -1 *max-eval*) (* 1 *max-eval*)))
-			moves)))) moves)
+(defun push-short-castle (board moves scale castle-row)
+  (when (and (= (aref board 5 castle-row) 0)
+	     (= (aref board 6 castle-row) 0))
+    (push-move moves 4 castle-row 6 castle-row (* scale 6) 0  (* scale 6)
+	       :c-short t)))
 
-(defun list-long-castle (board moves whitep)
-  (let ((castle-row (if whitep 0 7)))
-    (when (and (= (aref board 1 castle-row) 0)
-	       (= (aref board 2 castle-row) 0)
-	       (= (aref board 3 castle-row) 0))
-      (setf moves (cons (make-chess-move :old-col 4 :old-row castle-row
-					 :new-col 2 :new-row castle-row
-					 :old-val (aref board 4 castle-row)
-					 :new-val (aref board 4 castle-row)
-					 :castle-long t :evaluation
-					 (if (> (aref board 4 castle-row) 0) (* -1 *max-eval*) (* 1 *max-eval*)))
-			moves)))) moves)
+(defun push-long-castle (board moves scale castle-row)
+  (when (and (= (aref board 1 castle-row) 0)
+	     (= (aref board 2 castle-row) 0)
+	     (= (aref board 3 castle-row) 0))
+    (push-move moves 4 castle-row 2 castle-row (* scale 6) 0 (* scale 6) :c-long t)))
 
 (defun king-capturep (board moves)
-  (loop for move in moves
-     when (= (piece-type-to-val :king)
-	     (piece-type (aref board (chess-move-new-col move)
-			       (chess-move-new-row move)))) do
-       (return t)))
+  (declare (type (vector chess-move 256) moves)
+	   (type (simple-array fixnum (8 8)) board)
+	   (ignorable board))
+  (loop for move of-type chess-move across moves
+     when (= 6 (abs (chess-move-captured-val move)))
+     do (return t)))
 
 (defun field-is-attackedp (moves col row)
-  (loop for move in moves
-     when (and (= (chess-move-new-col move) col)
-	       (= (chess-move-new-row move) row)) do
-       (return t)))
+  (declare (type (vector chess-move 256) moves)
+	   (type fixnum col row))
+  (loop for move of-type chess-move across moves
+     when (and (= (chess-move-new-col move) col) (= (chess-move-new-row move) row))
+     do (return t)))
 
-(defun castle-still-legalp (move can-castle castle-row)
+(defun castle-still-legalp (move castlings castle-row)
+  (declare (type chess-move move)
+	   (type castlings castlings)
+	   (type fixnum castle-row))
   (when (and (= (chess-move-old-col move) 4)
 	     (= (chess-move-old-row move) castle-row))
-    (setf (car can-castle) nil
-	  (cdr can-castle) nil))
+    (setf (castlings-long castlings) nil)
+    (setf (castlings-short castlings) nil))
   (when (and (= (chess-move-old-col move) 0)
 	     (= (chess-move-old-row move) castle-row))
-    (setf (cdr can-castle) nil))
+    (setf (castlings-long castlings) nil))
   (when (and (= (chess-move-old-col move) 7)
 	     (= (chess-move-old-row move) castle-row))
-    (setf (car can-castle) nil)))
+    (setf (castlings-short castlings) nil)))
 
-(defun move-piece (board move castle-row)
-  (when (chess-move-castle-short move)
-    (setf (aref board 5 castle-row) (aref board 7 castle-row))
-    (setf (aref board 7 castle-row) 0))
-  (when (chess-move-castle-long move)
-    (setf (aref board 3 castle-row) (aref board 0 castle-row))
-    (setf (aref board 0 castle-row) 0))
-  (setf (aref board (chess-move-new-col move) (chess-move-new-row move)) (chess-move-new-val move))
-  (setf (aref board (chess-move-old-col move) (chess-move-old-row move)) 0)
-  (when (chess-move-enpassant move) 
-    (setf (aref board (chess-move-new-col move) (chess-move-old-row move)) 0)))
+(defun move-piece (game move castlings castle-row)
+  (declare (type chess-move move)
+	   (type chess-game game)
+	   (type castlings castlings)
+	   (type fixnum castle-row))
+  (with-slots (n-moves played-moves board) game
+    (castle-still-legalp move castlings castle-row)
+    (set-move (aref played-moves n-moves)
+	      (chess-move-old-col move) (chess-move-old-row move)
+	      (chess-move-new-col move) (chess-move-new-row move)
+	      (chess-move-old-val move) (chess-move-captured-val move)
+	      (chess-move-new-val move) (chess-move-enpassant move)
+	      (chess-move-double-jump move) (chess-move-castle-long move)
+	      (chess-move-castle-short move))
+    (incf n-moves)
+    (when (chess-move-castle-short move)
+      (setf (aref board 5 castle-row) (aref board 7 castle-row))
+      (setf (aref board 7 castle-row) 0))
+    (when (chess-move-castle-long move)
+      (setf (aref board 3 castle-row) (aref board 0 castle-row))
+      (setf (aref board 0 castle-row) 0))
+    (setf (aref board (chess-move-new-col move) (chess-move-new-row move))
+	  (chess-move-new-val move))
+    (setf (aref board (chess-move-old-col move) (chess-move-old-row move)) 0)
+    (when (chess-move-enpassant move) 
+      (setf (aref board (chess-move-new-col move) (chess-move-old-row move)) 0))))
 
-(defun unmove-piece (board move castle-row)
-  (when (chess-move-castle-short move)
-    (setf (aref board 7 castle-row) (aref board 5 castle-row))
-    (setf (aref board 5 castle-row) 0))
-  (when (chess-move-castle-long move)
-    (setf (aref board 0 castle-row) (aref board 3 castle-row))
-    (setf (aref board 3 castle-row) 0))
-  (setf (aref board (chess-move-new-col move) (chess-move-new-row move)) (chess-move-captured-val move))
-  (setf (aref board (chess-move-old-col move) (chess-move-old-row move)) (chess-move-old-val move))
-  (when (chess-move-enpassant move)
-    (setf (aref board (chess-move-new-col move) (chess-move-new-row move)) 0)
-    (setf (aref board (chess-move-new-col move) (chess-move-old-row move)) (chess-move-captured-val move))))
+(defun unmove-piece (game move castle-row)
+  (declare (type chess-move move)
+	   (type chess-game game)
+	   (type fixnum castle-row))
+  (with-slots (board n-moves) game
+    (decf n-moves)
+    (when (chess-move-castle-short move)
+      (setf (aref board 7 castle-row) (aref board 5 castle-row))
+      (setf (aref board 5 castle-row) 0))
+    (when (chess-move-castle-long move)
+      (setf (aref board 0 castle-row) (aref board 3 castle-row))
+      (setf (aref board 3 castle-row) 0))
+    (setf (aref board (chess-move-new-col move) (chess-move-new-row move))
+	  (chess-move-captured-val move))
+    (setf (aref board (chess-move-old-col move) (chess-move-old-row move))
+	  (chess-move-old-val move))
+    (when (chess-move-enpassant move)
+      (setf (aref board (chess-move-new-col move) (chess-move-new-row move)) 0)
+      (setf (aref board (chess-move-new-col move) (chess-move-old-row move))
+	    (chess-move-captured-val move)))))
 
-(defun list-moves (board can-castle whitep double-jump-p double-jump-col)
-  (let ((moves nil)
-	(whitep-factor (if whitep 1 -1)))
+(defun push-moves (game moves scale double-jump-p double-jump-col can-castle)
+  (declare (type fixnum scale double-jump-col)
+	   (type (vector chess-move 256) moves)
+	   (type chess-game game)
+	   (type castlings can-castle)
+	   (type boolean double-jump-p))
+  (let ((board (board game)))
+    (setf (fill-pointer moves) 0)
     (loop for row from 0 to 7 do
 	 (loop for col from 0 to 7
-	    when (> (* whitep-factor (aref board col row)) 0) do
+	    when (> (* scale (aref board col row)) 0) do
 	      (ecase (abs (aref board col row))
-		(1 (if whitep
-		       (setf moves (list-white-pawn-moves board col row moves double-jump-p double-jump-col))
-		       (setf moves (list-black-pawn-moves board col row moves double-jump-p double-jump-col))))
-		(2 (setf moves (list-knight-moves board col row moves whitep)))
-		(3 (setf moves (list-bishop-moves board col row moves whitep)))
-		(4 (setf moves (list-rook-moves board col row moves whitep)))
-		(5 (setf moves (list-queen-moves board col row moves whitep)))
-		(6 (setf moves (list-king-moves board col row moves whitep))))))
-    (when (car can-castle)
-      (setf moves (list-short-castle board moves whitep)))
-    (when (cdr can-castle)
-      (setf moves (list-long-castle board moves whitep)))
+		(1 (if (= scale 1)
+		       (push-pawn-moves board col row moves 1 7 4 double-jump-p
+					double-jump-col scale)
+		       (push-pawn-moves board col row moves 6 0 3 double-jump-p
+					double-jump-col scale)))
+		(2 (push-knight-moves board col row moves scale))
+		(3 (push-bishop-moves board col row moves scale))
+		(4 (push-rook-moves board col row moves scale))
+		(5 (push-queen-moves board col row moves scale))
+		(6 (push-king-moves board col row moves scale)))))
+    (let ((castle-row (if (> scale 0) 0 7)))
+      (when (castlings-short can-castle)
+	(push-short-castle board moves scale castle-row))
+      (when (castlings-long can-castle)
+	(push-long-castle board moves scale castle-row)))
     moves))
+
+(defun opponent-move-illegalp (board move moves opponent-castle-row)
+  (declare (type chess-move move)
+	   (type (vector chess-move 256) moves)
+	   (type (simple-array fixnum (8 8)) board))
+  (or (king-capturep board moves)
+      (and (chess-move-castle-long move)
+	   (field-is-attackedp moves 3 opponent-castle-row))
+      (and (chess-move-castle-short move)
+	   (field-is-attackedp moves 5 opponent-castle-row))))

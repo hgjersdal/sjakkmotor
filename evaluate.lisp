@@ -1,14 +1,17 @@
 (declaim (optimize (speed 3) (debug 0) (safety 0)))
-(in-package :sjakk)
+(in-package :sjakk2)
 
 (defun piece-value (piece)
+  (declare (type fixnum piece))
   (the (unsigned-byte 16)
-       (aref #(0 100 320 330 500 900 2000) (piece-type piece))))
+       (aref #(0 100 320 330 500 900 2000) (abs piece))))
 
-(defparameter *piece-square-table* (make-hash-table))
+(defparameter *piece-square-array*
+  (make-array 6 :element-type '(simple-array fixnum (8 8))
+	      :initial-element (make-array '(8 8) :element-type 'fixnum)))
 
-(setf (gethash 1 *piece-square-table*)
-      (make-array '(8 8) :element-type '(signed-byte 8) :initial-contents
+(setf (aref *piece-square-array* 0)
+      (make-array '(8 8) :element-type 'fixnum :initial-contents
 		  #(#(0   0   0   0   0   0   0   0)
 		    #(50  50  50  50  50  50  50  50 )
 		    #(10  10  20  30  30  20  10  10 )
@@ -18,8 +21,8 @@
 		    #( 5  10  10 -20 -20  10  10   5 )
 		    #( 0   0   0   0   0   0   0   0))))
 
-(setf (gethash 2 *piece-square-table*)
-      (make-array '(8 8) :element-type '(signed-byte 8) :initial-contents
+(setf (aref *piece-square-array* 1)
+      (make-array '(8 8) :element-type 'fixnum :initial-contents
 		  #(#(-50 -40 -30 -30 -30 -30 -40 -50 )
 		    #(-40 -20   0   0   0   0 -20 -40 )
 		    #(-30   0  10  15  15  10   0 -30 )
@@ -29,8 +32,8 @@
 		    #(-40 -20   0   5   5   0 -20 -40 )
 		    #(-50 -40 -30 -30 -30 -30 -40 -50 ))))
 
-(setf (gethash 3 *piece-square-table*)
-      (make-array '(8 8) :element-type '(signed-byte 8) :initial-contents
+(setf (aref *piece-square-array* 2)
+      (make-array '(8 8) :element-type 'fixnum :initial-contents
 		  #(#(-20 -10 -10 -10 -10 -10 -10 -20 )
 		    #(-10   0   0   0   0   0   0 -10 )
 		    #(-10   0   5  10  10   5   0 -10 )
@@ -40,8 +43,8 @@
 		    #(-10   5   0   0   0   0   5 -10 )
 		    #(-20 -10 -10 -10 -10 -10 -10 -20 ))))
 
-(setf (gethash 4 *piece-square-table*)
-      (make-array '(8 8) :element-type '(signed-byte 8) :initial-contents
+(setf (aref *piece-square-array* 3)
+      (make-array '(8 8) :element-type 'fixnum :initial-contents
 		  #(#(  0   0   0   0   0   0   0   0 )
 		    #(  5  10  10  10  10  10  10   5 )
 		    #( -5   0   0   0   0   0   0  -5 )
@@ -51,8 +54,8 @@
 		    #( -5   0   0   0   0   0   0  -5 )
 		    #(  0   0   0   5   5   0   0   0))))
 
-(setf (gethash 5 *piece-square-table*)
-      (make-array '(8 8) :element-type '(signed-byte 8) :initial-contents
+(setf (aref *piece-square-array* 4)
+      (make-array '(8 8) :element-type 'fixnum :initial-contents
 		  #(#(-20 -10 -10  -5  -5 -10 -10 -20 )
 		    #(-10   0   0   0   0   0   0 -10 )
 		    #(-10   0   5   5   5   5   0 -10 )
@@ -62,8 +65,8 @@
 		    #(-10   0   5   0   0   0   0 -10 )
 		    #(-20 -10 -10  -5  -5 -10 -10 -20))))
 
-(setf (gethash 6 *piece-square-table*)
-      (make-array '(8 8) :element-type '(signed-byte 8) :initial-contents
+(setf (aref *piece-square-array* 5)
+      (make-array '(8 8) :element-type 'fixnum :initial-contents
 		  #(#(-30 -40 -40 -50 -50 -40 -40 -30 )
 		    #(-30 -40 -40 -50 -50 -40 -40 -30 )
 		    #(-30 -40 -40 -50 -50 -40 -40 -30 )
@@ -74,17 +77,22 @@
 		    #( 20  30  10   0   0  10  30  20))))
 
 (defun square-val (bval col row)
-  (aref (gethash (abs bval) *piece-square-table*)
-	(if (< bval 0) row (- 7 row))
-	(if (< bval 0) col (- 7 col))))
+  (declare (type fixnum bval)
+	   (type fixnum col row)
+	   (type (vector (simple-array fixnum (8 8)) 6) *piece-square-array*))
+  (when (> bval 0)
+    (setf row (- 7 row)
+	  col (- 7 col)))
+  (aref (aref *piece-square-array* (- (abs bval) 1)) row col))
 
 (defun evaluate (board)
+  (declare (type (simple-array fixnum (8 8)) board))
   (let ((value 0))
-    (loop for col from 0 to 7 do
-	 (loop for row from 0 to 7 do
+    (loop for col of-type integer from 0 to 7 do
+	 (loop for row of-type integer from 0 to 7 do
 	      (let* ((bval (aref board col row))
 		     (scale (if (> bval 0) 1 -1)))
-		(incf value (* scale (piece-value bval)))
 		(unless (= 0 bval)
+		  (incf value (* scale (piece-value bval)))
 		  (incf value (* scale (square-val bval col row)))))))
-    value))
+    (the fixnum value)))
