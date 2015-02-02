@@ -1,5 +1,5 @@
 (declaim (optimize (speed 3) (debug 0) (safety 0)))
-(in-package :sjakk2)
+(in-package :sjakk3)
 
 (defstruct chess-move 
   (old-col 0 :type (unsigned-byte 8)) (old-row 0 :type (unsigned-byte 8))
@@ -54,3 +54,4 @@
    (black-castle :accessor black-castle :initform (make-castlings) :type castlings)
    (played-moves :accessor played-moves :initform (initial-played-moves))
    (n-moves :accessor n-moves :initform 0)))
+

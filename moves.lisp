@@ -1,9 +1,9 @@
 (declaim (optimize (speed 3) (debug 0) (safety 0)))
-(in-package :sjakk2)
+(in-package :sjakk3)
 
 (defun set-move (move oc or nc nr piece-val captured-val new-val
 		 enpassant double-jump c-long c-short)
-  (declare (type fixnum oc or nc nr piece-val captured-val new-val)
+  (declare (type fixnum *max-eval* oc or nc nr piece-val captured-val new-val)
 	   (type boolean double-jump enpassant c-long c-short)
 	   (type chess-move move))
   (setf (chess-move-evaluation move) (- *max-eval*)
@@ -17,14 +17,17 @@
 	(chess-move-enpassant move) enpassant
 	(chess-move-double-jump move) double-jump
 	(chess-move-castle-long move) c-long
-	(chess-move-castle-short move) c-short))
+	(chess-move-castle-short move) c-short
+	(chess-move-legalp move) t))
 
 (defun push-move (moves oc or nc nr piece-val captured-val new-val
 		  &key enpassant double-jump c-long c-short)
+  (declare (type fixnum oc or nc nr piece-val captured-val new-val)
+	   (type boolean enpassant double-jump c-long c-short)
+	   (type (vector chess-move 256) moves))
   (set-move (aref moves (fill-pointer moves)) oc or nc nr piece-val captured-val
 	    new-val enpassant double-jump c-long c-short)
   (incf (fill-pointer moves)))
-  
 
 (defun push-pawn-move (moves scale oc or nc nr piece-val captured-val trans-row
 		       double-jump enpassant)
@@ -32,8 +35,8 @@
 	   (type boolean double-jump enpassant)
 	   (type (vector chess-move 256) moves))
   (if (= nr trans-row)
-      (loop for val from 2 to 5 do
-	   (push-move moves oc or nc nr piece-val captured-val (* scale val)
+      (loop for val of-type fixnum from 2 to 5 do
+	   (push-move moves oc or nc nr piece-val captured-val (the fixnum (* scale val))
 		      :enpassant enpassant))
       (push-move moves oc or nc nr piece-val captured-val piece-val
 		 :enpassant enpassant :double-jump double-jump)))
@@ -46,7 +49,7 @@
 	   (type (simple-array fixnum (8 8)) board))
   (when (or (< nc 0) (> nc 7)) (return-from pawn-take))
   (let ((position-val (aref board nc nr)))
-    (when (< (* position-val scale) 0)
+    (when (< (the fixnum (* position-val scale)) 0)
       (push-pawn-move moves scale oc or nc nr piece-val position-val trans-row
 		      double-jump enpassant))))
 
@@ -57,24 +60,24 @@
 	   (type boolean double-jump-p)
 	   (type (vector chess-move 256) moves)
 	   (type (simple-array fixnum (8 8)) board))
-  (pawn-take board col row (+ col 1) (+ row scale) scale moves transform-row
+  (pawn-take board col row (the fixnum (+ col 1)) (the fixnum (+ row scale)) scale moves transform-row
 	     scale nil nil)
-  (pawn-take board col row (- col 1) (+ row scale) scale moves transform-row
+  (pawn-take board col row (the fixnum (- col 1)) (the fixnum (+ row scale)) scale moves transform-row
 	     scale nil nil)
   (when (= (aref board col (+ row scale)) 0)
-    (push-pawn-move moves scale col row col (+ row scale) scale 0 transform-row
+    (push-pawn-move moves scale col row col (the fixnum (+ row scale)) scale 0 transform-row
 		    nil nil)
     (when (and (= row home-row) (= (aref board col (+ row (* 2 scale))) 0))
-      (push-pawn-move moves scale col row col (+ row (* 2 scale)) scale 0
+      (push-pawn-move moves scale col row col (the fixnum (+ row (the fixnum (* 2 scale)))) scale 0
 		      transform-row t nil)))
   (when (and double-jump-p (= row enpassant-row) (= 1 (abs (- col double-jump-col))))
-    (push-pawn-move moves scale col row double-jump-col (+ row scale) scale
-		    (- scale) transform-row nil t)))
+    (push-pawn-move moves scale col row double-jump-col (the fixnum (+ row scale)) scale
+		    (the fixnum (- scale)) transform-row nil t)))
   
 (defun maybe-take (oc or nc nr piece-val position-val scale moves)
   (declare (type fixnum oc or nc nr piece-val position-val scale)
 	   (type (vector chess-move 256) moves))
-  (when (<= (* position-val scale) 0)
+  (when (<= (the fixnum (* position-val scale)) 0)
     (push-move moves oc or nc nr piece-val position-val piece-val)))
 
 (macrolet ((loopy (line1 line2)
@@ -107,37 +110,55 @@
       (loopy (for cc from (- col 1) downto 0) (for rr from (- row 1) downto 0)))))
 
 (defun push-queen-moves (board col row moves scale)
+  (declare (type fixnum col row scale)
+	   (type (vector chess-move 256) moves)
+	   (type (simple-array fixnum (8 8)) board))
   (push-rook-moves board col row moves scale)
   (push-bishop-moves board col row moves scale))
 
 (defun maybe-take-with-bounds (board oc or nc nr scale piece-val moves)
+  (declare (type fixnum oc or nc nr scale piece-val)
+	   (type (vector chess-move 256) moves)
+	   (type (simple-array fixnum (8 8)) board))
   (when (and (> nc -1) (< nc 8) (> nr -1) (< nr 8))
     (maybe-take oc or nc nr piece-val (aref board nc nr) scale moves)))
 
 (defun push-knight-moves (board col row moves scale)
-  (loop for cc in '(1 -1  1 -1 2 -2  2 -2)
-     for rr in    '(2  2 -2 -2 1  1 -1 -1)
+  (declare (type fixnum col row scale)
+	   (type (vector chess-move 256) moves)
+	   (type (simple-array fixnum (8 8)) board))
+  (loop for cc of-type fixnum in '(1 -1  1 -1 2 -2  2 -2)
+     for rr of-type fixnum in    '(2  2 -2 -2 1  1 -1 -1)
      with piece-val = (aref board col row) do
-       (maybe-take-with-bounds board col row (+ col cc) (+ row rr) scale piece-val
+       (maybe-take-with-bounds board col row (the fixnum (+ col cc)) (the fixnum (+ row rr)) scale piece-val
 			       moves)))
 	    
 (defun push-king-moves (board col row moves scale)
+  (declare (type fixnum col row scale)
+	   (type (vector chess-move 256) moves)
+	   (type (simple-array fixnum (8 8)) board))
   (let ((piece-val (aref board col row)))
-    (loop for cc from (- col 1) to (+ col 1) do
-	 (loop for rr from (- row 1) to (+ row 1) do
+    (loop for cc of-type fixnum from (- col 1) to (+ col 1) do
+	 (loop for rr of-type fixnum from (- row 1) to (+ row 1) do
 	      (maybe-take-with-bounds board col row cc rr scale piece-val moves)))))
 
 (defun push-short-castle (board moves scale castle-row)
+  (declare (type fixnum scale castle-row)
+	   (type (vector chess-move 256) moves)
+	   (type (simple-array fixnum (8 8)) board))
   (when (and (= (aref board 5 castle-row) 0)
 	     (= (aref board 6 castle-row) 0))
-    (push-move moves 4 castle-row 6 castle-row (* scale 6) 0  (* scale 6)
+    (push-move moves 4 castle-row 6 castle-row (the fixnum (* scale 6)) 0  (the fixnum (* scale 6))
 	       :c-short t)))
 
 (defun push-long-castle (board moves scale castle-row)
+  (declare (type fixnum scale castle-row)
+	   (type (vector chess-move 256) moves)
+	   (type (simple-array fixnum (8 8)) board))
   (when (and (= (aref board 1 castle-row) 0)
 	     (= (aref board 2 castle-row) 0)
 	     (= (aref board 3 castle-row) 0))
-    (push-move moves 4 castle-row 2 castle-row (* scale 6) 0 (* scale 6) :c-long t)))
+    (push-move moves 4 castle-row 2 castle-row (the fixnum (* scale 6)) 0 (the fixnum (* scale 6)) :c-long t)))
 
 (defun king-capturep (board moves)
   (declare (type (vector chess-move 256) moves)
@@ -175,6 +196,9 @@
 	   (type castlings castlings)
 	   (type fixnum castle-row))
   (with-slots (n-moves played-moves board) game
+    (declare (type (simple-array fixnum (8 8)) board)
+	     (type fixnum n-moves)
+	     (type (simple-vector 256) played-moves))
     (castle-still-legalp move castlings castle-row)
     (set-move (aref played-moves n-moves)
 	      (chess-move-old-col move) (chess-move-old-row move)
@@ -201,6 +225,8 @@
 	   (type chess-game game)
 	   (type fixnum castle-row))
   (with-slots (board n-moves) game
+    (declare (type (simple-array fixnum (8 8)) board)
+	     (type fixnum n-moves))
     (decf n-moves)
     (when (chess-move-castle-short move)
       (setf (aref board 7 castle-row) (aref board 5 castle-row))
@@ -224,10 +250,11 @@
 	   (type castlings can-castle)
 	   (type boolean double-jump-p))
   (let ((board (board game)))
+    (declare (type (simple-array fixnum (8 8)) board))
     (setf (fill-pointer moves) 0)
-    (loop for row from 0 to 7 do
-	 (loop for col from 0 to 7
-	    when (> (* scale (aref board col row)) 0) do
+    (loop for row of-type fixnum from 0 to 7 do
+	 (loop for col of-type fixnum  from 0 to 7
+	    when (> (the fixnum (* scale (aref board col row))) 0) do
 	      (ecase (abs (aref board col row))
 		(1 (if (= scale 1)
 		       (push-pawn-moves board col row moves 1 7 4 double-jump-p
@@ -252,6 +279,8 @@
 	   (type (simple-array fixnum (8 8)) board))
   (or (king-capturep board moves)
       (and (chess-move-castle-long move)
+	   (field-is-attackedp moves 4 opponent-castle-row)
 	   (field-is-attackedp moves 3 opponent-castle-row))
       (and (chess-move-castle-short move)
+	   (field-is-attackedp moves 4 opponent-castle-row)
 	   (field-is-attackedp moves 5 opponent-castle-row))))

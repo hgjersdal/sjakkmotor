@@ -1,5 +1,5 @@
 (declaim (optimize (speed 3) (debug 0) (safety 0)))
-(in-package :sjakk2)
+(in-package :sjakk3)
 
 (defmacro move-eval-set ((game move castlings castle-row) &body eval-form)
   (let ((clong (gensym))
@@ -15,35 +15,40 @@
 (defmacro alpha-beta ((game moves mv a2 fline
 			    alpha beta castlings castle-row) &body eval-form)
   (let ((best-val (gensym)))
-    `(loop for ,mv across ,moves
-	with ,a2 = ,alpha
-	with ,best-val = ,a2
-        ,@fline
-	do
-	  (move-eval-set (,game ,mv ,castlings ,castle-row) ,@eval-form)
-	  (let ((val (chess-move-evaluation ,mv)))
-	    (when (= val ,a2) (setf (chess-move-evaluation ,mv) (- *max-eval*)))
-	    (setf ,best-val (max val ,best-val))
-	    (setf ,a2 (max ,a2 val)))
-	  (when (>= ,a2 ,beta) (return ,best-val))
-	finally (return ,best-val))))
-
+    `(progn
+       (loop for ,mv of-type chess-move across ,moves
+	  with ,a2 of-type fixnum = ,alpha
+	  with ,best-val of-type fixnum  = ,a2
+	    ,@fline
+	  do
+	    (move-eval-set (,game ,mv ,castlings ,castle-row) ,@eval-form)
+	    (let ((val (chess-move-evaluation ,mv)))
+	      (when (= val ,a2) (setf (chess-move-evaluation ,mv) (- *max-eval*)))
+	      (setf ,best-val (max val ,best-val))
+	      (setf ,a2 (max ,a2 val)))
+	    (when (>= ,a2 ,beta) (return ,best-val))
+	  finally (return ,best-val)))))
+  
 (defun quiescence (game depth move alpha beta scale castlings opponent-castlings
 		   index castle-row)
-  (declare (type fixnum depth scale alpha beta index)
+  (declare (type fixnum depth scale alpha beta index castle-row )
 	   (type chess-move move)
 	   (type castlings castlings opponent-castlings)
 	   (type chess-game game))
   (with-slots (board move-arrays) game
     (let ((moves (aref move-arrays index))
-	  (val (* scale (the fixnum (evaluate (board game))))))
+	  (val (the fixnum (* scale (the fixnum (evaluate game))))))
+      (declare (type fixnum val)
+	       (type (simple-array fixnum (8 8)) board)
+	       (type (vector chess-move 256) moves)
+	       (type (simple-vector 21) move-arrays))
       (when (or (= 0 depth) (>= val beta))
 	(return-from quiescence (the fixnum val)))
       (when (> val alpha)
 	(setf alpha val))
       (push-moves game moves scale (chess-move-double-jump move)
 		  (chess-move-old-col move) castlings)
-      (when (opponent-move-illegalp board move moves (- 7 castle-row))
+      (when (opponent-move-illegalp board move moves (the fixnum (- 7 castle-row)))
 	(setf (chess-move-legalp move) nil)
 	(return-from quiescence (the fixnum *max-eval*)))
       (the fixnum 

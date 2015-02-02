@@ -1,10 +1,12 @@
 (declaim (optimize (speed 3) (debug 0) (safety 0)))
-(in-package :sjakk2)
+(in-package :sjakk3)
 
-(defun piece-value (piece)
-  (declare (type fixnum piece))
-  (the (unsigned-byte 16)
-       (aref #(0 100 320 330 500 900 2000) (abs piece))))
+(let ((piece-val (make-array 7 :element-type 'fixnum :initial-contents #(0 100 320 330 500 900 2000))))
+  (defun piece-value (piece)
+    (declare (type fixnum piece))
+    (declare (type (simple-array fixnum (7)) piece-val))
+    (the fixnum
+	 (aref piece-val (abs piece)))))
 
 (defparameter *piece-square-array*
   (make-array 6 :element-type '(simple-array fixnum (8 8))
@@ -83,16 +85,21 @@
   (when (> bval 0)
     (setf row (- 7 row)
 	  col (- 7 col)))
-  (aref (aref *piece-square-array* (- (abs bval) 1)) row col))
+  (let ((a (aref *piece-square-array* (- (abs bval) 1))))
+    (declare (type (simple-array fixnum (8 8)) a))
+    (the fixnum (aref a row col))))
 
-(defun evaluate (board)
-  (declare (type (simple-array fixnum (8 8)) board))
-  (let ((value 0))
+(defun evaluate (game)
+  (declare (type chess-game game))
+  (let ((value 0)
+	(board (board game)))
+    (declare (type (simple-array fixnum (8 8)) board)
+	     (type fixnum value))
     (loop for col of-type integer from 0 to 7 do
 	 (loop for row of-type integer from 0 to 7 do
 	      (let* ((bval (aref board col row))
 		     (scale (if (> bval 0) 1 -1)))
 		(unless (= 0 bval)
-		  (incf value (* scale (piece-value bval)))
+		  (incf value (the fixnum (* scale (piece-value bval))))
 		  (incf value (* scale (square-val bval col row)))))))
     (the fixnum value)))
