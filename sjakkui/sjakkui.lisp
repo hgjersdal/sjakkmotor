@@ -37,6 +37,8 @@ arguments."
   (stop-webapp 'sjakkui)
   (stop-weblocks))
 
+(start-weblocks :port 8901)
+(start-webapp 'sjakkui)
 ;;(ql:quickload 'sjakkui)
 ;;(start-sjakkui)
 ;;(stop-sjakkui)

@@ -12,6 +12,28 @@
   (make-array 6 :element-type '(simple-array fixnum (8 8))
 	      :initial-element (make-array '(8 8) :element-type 'fixnum)))
 
+(defparameter *king-not-endgame*
+  (make-array '(8 8) :element-type 'fixnum :initial-contents
+	      #(#(-30 -40 -40 -50 -50 -40 -40 -30 )
+		#(-30 -40 -40 -50 -50 -40 -40 -30 )
+		#(-30 -40 -40 -50 -50 -40 -40 -30 )
+		#(-30 -40 -40 -50 -50 -40 -40 -30 )
+		#(-20 -30 -30 -40 -40 -30 -30 -20 )
+		#(-10 -20 -20 -20 -20 -20 -20 -10 )
+		#( 20  20   0   0   0   0  20  20 )
+		#( 20  30  10   0   0  10  30  20))))
+
+(defparameter *king-endgame*
+  (make-array '(8 8) :element-type 'fixnum :initial-contents
+	      #(#(-50 -40 -30 -20 -20 -30 -40 -50 )
+		#(-30 -20 -10   0   0 -10 -20 -30 )
+		#(-30 -10  20  30  30  20 -10 -30 )
+		#(-30 -10  30  40  40  30 -10 -30 )
+		#(-30 -10  30  40  40  30 -10 -30 )
+		#(-30 -10  20  30  30  20 -10 -30 )
+		#(-30 -30   0   0   0   0 -30 -30 )
+		#(-50 -30 -30 -30 -30 -30 -30 -50))))
+
 (setf (aref *piece-square-array* 0)
       (make-array '(8 8) :element-type 'fixnum :initial-contents
 		  #(#(0   0   0   0   0   0   0   0)
@@ -67,16 +89,13 @@
 		    #(-10   0   5   0   0   0   0 -10 )
 		    #(-20 -10 -10  -5  -5 -10 -10 -20))))
 
-(setf (aref *piece-square-array* 5)
-      (make-array '(8 8) :element-type 'fixnum :initial-contents
-		  #(#(-30 -40 -40 -50 -50 -40 -40 -30 )
-		    #(-30 -40 -40 -50 -50 -40 -40 -30 )
-		    #(-30 -40 -40 -50 -50 -40 -40 -30 )
-		    #(-30 -40 -40 -50 -50 -40 -40 -30 )
-		    #(-20 -30 -30 -40 -40 -30 -30 -20 )
-		    #(-10 -20 -20 -20 -20 -20 -20 -10 )
-		    #( 20  20   0   0   0   0  20  20 )
-		    #( 20  30  10   0   0  10  30  20))))
+(setf (aref *piece-square-array* 5) *king-not-endgame*)
+
+(defun endgame ()
+  (setf (aref *piece-square-array* 5) *king-endgame*))
+
+(defun not-endgame ()
+  (setf (aref *piece-square-array* 5) *king-not-endgame*))
 
 (defun square-val (bval col row)
   (declare (type fixnum bval)

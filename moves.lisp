@@ -51,7 +51,7 @@
 	   (type boolean double-jump enpassant)
 	   (type (vector chess-move 256) moves)
 	   (type (simple-array fixnum (8 8)) board))
-  (when (or (< nc 0) (> nc 7)) (return-from pawn-take))
+  (when (or (< nc 0) (> nc 7)) (return-from push-pawn-take))
   (let ((position-val (aref board nc nr)))
     (when (< (the fixnum (* position-val scale)) 0)
       (push-pawn-move moves scale oc or nc nr piece-val position-val trans-row
