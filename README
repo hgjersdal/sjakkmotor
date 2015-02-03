@@ -8,4 +8,11 @@ Webapp user interface made with weblocks.
 
 Does not understand 50 move rule, repeated positions.
 
-Scratched goal of 500 lines. The engine logic alone is around 500 lines if comments and type declarations are removed.
+FAiled on goal of 500 lines. The engine logic alone is around 500 lines if comments and type declarations are removed, though.
+
+Installation:
+(pushnew "/home/haavagj/src/sjakkmotor2/" asdf:*central-registry* :test #'equal)
+(pushnew "/home/haavagj/src/sjakkmotor2/sjakkui/" asdf:*central-registry* :test #'equal)
+(ql:quickload "sjakkmotor")
+(ql:quickload "sjakkui")
+(sjakkui:start-sjakkui)
