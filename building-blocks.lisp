@@ -1,5 +1,6 @@
 (declaim (optimize (speed 3) (debug 0) (safety 0)))
 (in-package :sjakk3)
+;;;Various data containers for describing a chess game.
 
 (defstruct chess-move 
   (old-col 0 :type (unsigned-byte 8)) (old-row 0 :type (unsigned-byte 8))

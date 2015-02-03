@@ -17,16 +17,10 @@
     (-5 "&#9819;")
     (-6 "&#9818;")))
 
-(defun init-chess-move-array ()
-  (let ((a (make-array 256 :element-type 'sjakk3::chess-move :initial-element (sjakk3::make-chess-move) :fill-pointer 0 :adjustable t)))
-    (loop for i from 0 to 255 do
-	 (setf (aref a i) (sjakk3::make-chess-move)))
-    a))
-
 (defwidget game ()
   ((col :accessor col :initform -1)
    (row :accessor row :initform -1)
-   (moves :accessor moves :initform (init-chess-move-array))
+   (moves :accessor moves :initform (make-array 256 :adjustable t :fill-pointer 0))
    (board :accessor board :initform (make-array '(8 8)))
    (white-to-move :accessor white-to-move :initform t)))
 
@@ -42,12 +36,11 @@
   (let ((move (if (= (sjakk3::n-moves *chess-game*) 0)
 		  (sjakk3::make-chess-move)
 		  (aref (sjakk3::played-moves *chess-game*) (- (sjakk3::n-moves *chess-game*) 1)))))
-    (sjakk3::push-moves *chess-game* (moves widget) 1 (sjakk3::chess-move-double-jump move)
-			(sjakk3::chess-move-old-col move) (sjakk3::white-castle *chess-game*))
-    (loop for move across (moves widget) do ;;Elaborate way of seeing if move is legal
-	 (sjakk3::negamaxit *chess-game* 1 move -32500 32500 1
-			    (sjakk3::white-castle *chess-game*) (sjakk3::black-castle *chess-game*)
-			    0 0 0))))
+    (sjakk3::negamaxit *chess-game* 2 move -32500 32500 1
+		       (sjakk3::white-castle *chess-game*) (sjakk3::black-castle *chess-game*)
+		       0 0 0)
+    (setf (moves widget) (aref (sjakk3::move-arrays *chess-game*) 0))))
+
 
 (defun attacked-p (moves oc or nc nr)
   (loop for move across moves
@@ -60,20 +53,30 @@
      do (return t)
      finally (return nil)))
 
-(defun background (col row)
-  (if (or (and (oddp row) (oddp col)) (and (evenp row) (evenp col)))
-      "#ccc" "#fff"))
+(defun background (widget col row)
+  (let* ((n-moves (sjakk3::n-moves *chess-game*))
+	 (move (if (> n-moves 0) (aref (sjakk3::played-moves *chess-game*) (- n-moves 1)) nil)))
+    (cond ((and (white-to-move widget) move
+		(= col (sjakk3::chess-move-old-col move))
+		(= row (sjakk3::chess-move-old-row move)))
+	   "#ccf")
+	  ((and (white-to-move widget) move
+		(= col (sjakk3::chess-move-new-col move))
+		(= row (sjakk3::chess-move-new-row move)))
+	   "#ccf")
+	  ((or (and (oddp row) (oddp col)) (and (evenp row) (evenp col))) "#ccc")
+	  (t "#fff"))))
 
-(defun norm-square (col row val border)
+(defun norm-square (col row val border widget)
   (with-html 
     (:td :style (format nil "border: 1px solid ~a; background: ~a; height: 80px; width: 80px;font-size: 50pt"
-			border (background col row))
+			border (background widget col row))
 	 (str (format nil "~a" (chess-piece-to-html val))))))
 
 (defun piece-square (col row val widget)
   (with-html 
     (:td :style (format nil "border: 1px solid ~a; background: ~a; height: 80px; width: 80px;font-size: 50pt;};"
-			"black" (background col row))
+			"black" (background widget col row))
 	 (render-link
 	  (f_% (setf (col widget) col)
 	       (setf (row widget) row)
@@ -83,7 +86,7 @@
 (defun attacked-square (col row val widget)
   (with-html 
     (:td :style (format nil "border : 1px solid ~a; background: ~a; height: 80px; width: 80px;font-size: 50pt;};"
-			"yellow" (background col row))
+			"yellow" (background widget col row))
 	 (render-link
 	  (f_%
 	    (setf (white-to-move widget) nil)
@@ -110,24 +113,19 @@
   (let ((val (aref (board widget) col row))
 	(attacked (attacked-p (moves widget) (col widget) (row widget) col row)))
     (cond
-      ((not (white-to-move widget)) (norm-square col row val "black"))
+      ((not (white-to-move widget)) (norm-square col row val "black" widget))
       ((> val 0) (piece-square col row val widget))
       (attacked (attacked-square col row val widget))
-      (t (norm-square col row val "black")))))
+      (t (norm-square col row val "black" widget)))))
     
 (defmethod render-widget-body ((widget game) &rest args)
   (declare (ignorable args))
   (if (white-to-move widget)
       (push-moves-with-check widget)
       (with-html
-	(:meta :http-equiv "refresh" :content "2")))
+	(:script :type "text/javascript"
+		 "setTimeout(function(){ location.reload(); }, 4000);")))
   (with-html
-    (str (format nil "~a~%" (moves widget)))
-    (str (if (attacked-p (moves widget) 1 0 2 2)
-	     "ATTACK!!!" "what?"))
-    (str (if (sjakk3::chess-move-legalp (aref (moves widget) 0))
-	     "YES!" "no."))
-    (str (format nil "~a, ~a~%" (col widget) (row widget)))
     (:table :style "text-align: center;"
 	    (loop for row from 7 downto 0 do
 		 (with-html
