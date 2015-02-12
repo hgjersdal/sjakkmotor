@@ -288,7 +288,7 @@
 		   (setf (row widget) -1)
 		   (setf (show-game widget) (make-instance 'sjakk3::chess-game))
 		   (setf (computer-game widget) (make-instance 'sjakk3::chess-game))
-		   (setf (sjakk3::search-time computer-game) current-time)
+		   (setf (sjakk3::search-time (computer-game widget)) current-time)
 		   (setf (n-moves widget) 0)
 		   (setf (white-to-move widget) t)
 		   (setf (current widget) t)
