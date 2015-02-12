@@ -52,27 +52,36 @@
 	 when (and (= (chess-move-old-col move) fc)
 		   (= (chess-move-old-row move) fr)
 		   (= (chess-move-new-col move) tc)
-		   (= (chess-move-new-row move) tr)) do
+		   (= (chess-move-new-row move) tr)
+		   (or (= (chess-move-old-val move) (chess-move-new-val move))
+		       (= (abs (chess-move-new-val move)) 5)))
+	 do
 	   (if whitep
 	       (move-piece game move (white-castle game) 0)
 	       (move-piece game move (black-castle game) 7))
-	   (print-board board))))
-  (if (not (chess-move-legalp (aref (played-moves game) (- (n-moves game) 1))))
-      (format t "lost!")))
+	   (return)))))
+
+(defun get-last-move (game)
+  (with-slots (n-moves played-moves) game
+    (if (= n-moves 0)
+	(make-chess-move)
+	(aref played-moves (- n-moves 1)))))
 
 (defun analyze (game whitep depth qdepth)
   "Analyze position. Cannot be done by alpha-beta, each move from current position
 must be searched independently."
-  (with-slots (move-arrays) game
-    (let ((moves (aref move-arrays 0)))
-      (push-moves game moves (if whitep 1 -1) nil 0
+  (with-slots (move-arrays n-moves) game
+    (let ((move (get-last-move game))
+	  (moves (aref move-arrays 0)))
+      (push-moves game moves (if whitep 1 -1) (chess-move-double-jump move) (chess-move-old-col move)
 		  (if whitep (white-castle game) (black-castle game)))
       (loop for move across moves do
 	   (move-eval-set (game move (if whitep (white-castle game) (black-castle game)) (if whitep 0 7))
-	     (- (negamaxit game (- depth 1) move (- *max-eval*) *max-eval* (if whitep -1 1)
-			   (if whitep (black-castle game) (white-castle game))
-			   (if whitep (white-castle game) (black-castle game))
-			   qdepth 1 (if whitep 7 0)))))
+	     ;; (- (negamaxit game (- depth 1) move (- *max-eval*) *max-eval* (if whitep -1 1)
+	     ;; 		   (if whitep (black-castle game) (white-castle game))
+	     ;; 		   (if whitep (white-castle game) (black-castle game))
+	     ;; 		   qdepth 1 (if whitep 7 0)))))
+	     (sjakk3::depth-search game (- depth 1) qdepth whitep 1)))
       (setf moves (sort moves (lambda (a b)
 				(> (chess-move-evaluation a)
 				   (chess-move-evaluation b)))))
@@ -92,28 +101,21 @@ must be searched independently."
   "Computer move. Picks the move suggested by negamax search of depth, 
 with a quiescense search of qdepth. If not secret it prints value of position to t."
   (format t "Thinking...~%")
-  (let ((val
-	 (time 
-	  (if whitep
-	      (negamaxit game depth (make-chess-move) (* 2 (- *max-eval*)) (* 2 *max-eval*) 1
-			 (white-castle game) (black-castle game) qdepth 0 0)
-	      (negamaxit game depth (make-chess-move) (* 2 (- *max-eval*)) (* 2 *max-eval*) -1
-			 (black-castle game) (white-castle game) qdepth 0 7)))))
+  ;; (let* ((move (get-last-move game))
+  ;; 	 (val
+  ;; 	  (time 
+	   ;;(if whitep
+	   ;; (negamaxit game depth move (* 2 (- *max-eval*)) (* 2 *max-eval*) 1
+	   ;; 		  (white-castle game) (black-castle game) qdepth 0 0)
+	   ;; (negamaxit game depth move (* 2 (- *max-eval*)) (* 2 *max-eval*) -1
+	   ;; 		  (black-castle game) (white-castle game) qdepth 0 7)))))
+  (let ((val (time-search game depth qdepth whitep 0)))
     (let ((moves (aref (move-arrays game) 0)))
       (unless secret 
 	(format t "Value is: ~a~%" val)
-	(loop for move across moves do
-	     (when (> (chess-move-evaluation move) (- *max-eval*))
-	       (format t "~a: ~a~%" move (chess-move-evaluation move))))
-	(format t "~a - ~a~%" (white-castle game) (black-castle game))
-	(when (> qdepth 0)
-	  (format t "Quiescence search!~%")))
-      (format t "Selecting ~a: ~a ~a~% " (floor (/ (n-moves game) 2))
-	      (if whitep "" "...")
-	      (aref moves 0))
+	(format t "Selecting ~a: ~a ~a~% " (floor (/ (n-moves game) 2))
+		(if whitep "" "...")
+		(aref moves 0)))
       (if whitep
 	  (move-piece game (aref moves 0) (white-castle game) 0)
-	  (move-piece game (aref moves 0) (black-castle game) 7))
-      (print-board (board game))
-      (if (not (chess-move-legalp (aref moves 0)))
-	  (format t "lost!")))))
+	  (move-piece game (aref moves 0) (black-castle game) 7)))))

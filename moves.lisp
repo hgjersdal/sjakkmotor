@@ -1,3 +1,6 @@
+;;Parallelize?
+;;Mate should take depth into account, only playing legal moves, maing sure legal moves go to the top
+
 (declaim (optimize (speed 3) (debug 0) (safety 0)))
 (in-package :sjakk3)
 

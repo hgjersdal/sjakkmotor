@@ -54,5 +54,7 @@
    (white-castle :accessor white-castle :initform (make-castlings) :type castlings)
    (black-castle :accessor black-castle :initform (make-castlings) :type castlings)
    (played-moves :accessor played-moves :initform (initial-played-moves))
-   (n-moves :accessor n-moves :initform 0)))
+   (start-time :accessor start-time :initform 0 :type fixnum)
+   (search-time :accessor search-time :initform 5000 :type fixnum)
+   (n-moves :accessor n-moves :initform 0 :type fixnum)))
 
