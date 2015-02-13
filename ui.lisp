@@ -1,3 +1,5 @@
+;;Is the game finished? No legal moves? King in check?
+
 ;;(declaim (optimize (speed 3) (debug 0) (safety 0)))
 (in-package :sjakk3)
 
@@ -67,7 +69,7 @@
 	(make-chess-move)
 	(aref played-moves (- n-moves 1)))))
 
-(defun analyze (game whitep depth qdepth)
+(defun analyze (game whitep &optional time)
   "Analyze position. Cannot be done by alpha-beta, each move from current position
 must be searched independently."
   (with-slots (move-arrays n-moves) game
@@ -77,11 +79,8 @@ must be searched independently."
 		  (if whitep (white-castle game) (black-castle game)))
       (loop for move across moves do
 	   (move-eval-set (game move (if whitep (white-castle game) (black-castle game)) (if whitep 0 7))
-	     ;; (- (negamaxit game (- depth 1) move (- *max-eval*) *max-eval* (if whitep -1 1)
-	     ;; 		   (if whitep (black-castle game) (white-castle game))
-	     ;; 		   (if whitep (white-castle game) (black-castle game))
-	     ;; 		   qdepth 1 (if whitep 7 0)))))
-	     (sjakk3::depth-search game (- depth 1) qdepth whitep 1)))
+	     (sjakk3::time-search game whitep 1 time))
+	   (format t "~a: ~a~%" move (chess-move-evaluation move)))
       (setf moves (sort moves (lambda (a b)
 				(> (chess-move-evaluation a)
 				   (chess-move-evaluation b)))))
@@ -90,6 +89,8 @@ must be searched independently."
 
 (defun random-move (game whitep sorted-moves max-diff)
   "Pick a random move with a score that differs from the best score by no more than max-diff."
+  (loop for move across sorted-moves do
+       (format t "~a: ~a~%" move (chess-move-evaluation move)))
   (let ((eq-index 0))
     (loop for move across sorted-moves
        with top = (chess-move-evaluation (aref sorted-moves 0))
@@ -97,19 +98,11 @@ must be searched independently."
 	 (incf eq-index))
     (move-piece game (aref sorted-moves (random eq-index)) (if whitep (white-castle game) (black-castle game)) (if whitep 0 7))))
 
-(defun computer-move (game whitep depth qdepth secret)
-  "Computer move. Picks the move suggested by negamax search of depth, 
-with a quiescense search of qdepth. If not secret it prints value of position to t."
+(defun computer-move (game whitep secret)
+  "Computer move. Picks the move suggested by computer after a timed-search.
+If not secret it prints value of position to t."
   (format t "Thinking...~%")
-  ;; (let* ((move (get-last-move game))
-  ;; 	 (val
-  ;; 	  (time 
-	   ;;(if whitep
-	   ;; (negamaxit game depth move (* 2 (- *max-eval*)) (* 2 *max-eval*) 1
-	   ;; 		  (white-castle game) (black-castle game) qdepth 0 0)
-	   ;; (negamaxit game depth move (* 2 (- *max-eval*)) (* 2 *max-eval*) -1
-	   ;; 		  (black-castle game) (white-castle game) qdepth 0 7)))))
-  (let ((val (time-search game depth qdepth whitep 0)))
+  (let ((val (time-search game whitep 0)))
     (let ((moves (aref (move-arrays game) 0)))
       (unless secret 
 	(format t "Value is: ~a~%" val)
